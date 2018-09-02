@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>To Do List</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO"
+        crossorigin="anonymous">
+    <!-- Font Awesome Icon font, check: https://fontawesome.com/how-to-use ()-->
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css" integrity="sha384-hWVjflwFxL6sNzntih27bfxkr27PmbbK/iSvJ+a4+0owXq79v+lsFkW54bOGbiDQ"
+        crossorigin="anonymous">
+    <style>
+        section {
+            margin: 50px 0;
+        }
+        .list-group-item,
+        .list-group-item:hover,
+        .list-group-item i,
+        .list-group-item i:hover,
+        .list-group-item:hover i {
+            transition: 0.3s;
+            transition-timing-function: cubic-bezier(0.075, 0.82, 0.165, 1);
+        }
+        .list-group-item {
+            cursor: pointer;
+            /* display mouse hand icon when hover the element */
+        }
+        .list-group-item:hover {
+            color: rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 5px 0 rgb(209, 255, 4);
+        }
+        .list-group-item i {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        /* When Hover list-group-item, show trash icon */
+        .list-group-item:hover i {
+            opacity: 0.6;
+            pointer-events: auto;
+        }
+        .list-group-item i:hover {
+            opacity: 1;
+        }
+        .btnRemove {
+            right: 130px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="jumbotron jumbotron-fluid">
+        <div class="container">
+            <h1 class="display-4">To Do List</h1>
+            <p class="lead">Create your list!</p>
+        </div>
+    </div>
+    <section class="input-group">
+        <div class="container">
+            <form id="post-form">
+                <div class="form-group">
+                    <label for="exampleInputEmail1">What do you want to do?</label>
+                    <!-- Min: 1 characters -->
+                    <input pattern=".{1,}" required title="1 characters minimum" type="text" class="form-control" id="post-item-name" aria-describedby="emailHelp"
+                        placeholder="Type your task">
+                </div>
+                <div class="form-group">
+                    <label for="item-cost">Please set deadline</label>
+                    <input type="date" class="form-control" id="item-cost" 
+                        placeholder="yyyy-mm-dd">
+                </div>
+                <button class="btn btn-primary" type='submit'>Add</button>
+            </form>
+        </div>
+    </section>
+    <section class="todolist">
+        <div class="container">
+            <h2>List</h2>
+            <ul id="item-lists" class="list-group">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    Example: Homework
+                    <span class="badge badge-primary badge-pill">2018-08-18</span>
+                </li>
+            </ul>
+        </div>
+    </section>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+    <script>
+        // Whether Refresh the page after sending ajax requests
+        const Debug_Mode = false;
+        const BASE_URL = window.location.origin;
+        const API_URL = BASE_URL + '/record';
+        /**************************************************************
+         * Supports
+         **************************************************************/
+        function preventReload(e) {
+            if (Debug_Mode) {
+                e.preventDefault();
+            }
+        }
+        /**************************************************************
+         * Part 1: Initialize (GET Old Records)
+         **************************************************************/
+        function generateDataHtml(data) {
+            let elementsHtml = '';
+            for (item of data) {
+                console.log(item)
+                const element =
+                    `
+                <li data-record-id="${item['id']}" class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <input type="checkbox"  class="status">
+                        <span class="item-id">${item['id']}:</span>                
+                        <span class="item-name">${item['name']}</span>
+                    </div>
+                    <i data-record-id="${item['id']}" class="btnRemove far fa-trash-alt"></i>
+                    <span data-record-cost="${item['cost']}" class="item-cost badge badge-primary badge-pill">${item['cost']}</span>
+                </li>`;
+        
+                elementsHtml += element;
+            }
+            return elementsHtml;
+        }
+        /**
+         * Append list html in <ul> element
+         */
+        function loadListData(data) {
+            const dataHtml = generateDataHtml(data);
+            const sortByDateAsc = function (lhs, rhs)  { return lhs > rhs ? 1 : lhs < rhs ? -1 : 0; };
+            $('#item-lists').append(dataHtml);
+            $('#item-lists').sort(sortByDateAsc);
+        }
+        /**
+         * Send GET requests to server to get purchase record from db
+         */
+        function getItemsFromServer() {
+            $.ajax({
+                url: API_URL,
+                method: 'GET',
+                success: function (data) {
+                    loadListData(data)
+                },
+                error: function (xhr, ajaxOptions, thrownError) {
+                    console.log(xhr.status);
+                    console.log(thrownError);
+                }
+            });
+        }
+        /**************************************************************
+         * Part 2: Create New Record
+         **************************************************************/
+        /**
+         * Get Input Value (name & price) From html input area
+         */
+        function getPostInputData() {
+            const itemName = $('#post-item-name').val();
+            const itemCost = document.getElementById("item-cost").value;
+            return {
+                'name': itemName,
+                'cost': itemCost,
+            }
+        }
+        /**
+         * Send Post Request to create new purchase record
+         */
+        function postItemToServer(inputData) {
+            $.ajax({
+                url: API_URL,
+                method: 'POST',
+                data: inputData,
+                success: function (data) {
+                    console.log(data);
+                },
+                error: function (xhr, ajaxOptions, thrownError) {
+                    console.log(xhr.status);
+                    console.log(thrownError);
+                }
+            });
+        }
+        /**************************************************************
+         * Part 3: Edit Record by id
+         **************************************************************/
+        function showEditForm(recordId) {
+            const recordElement = $(`.list-group-item[data-record-id='${recordId}'`);
+            const oldName = recordElement.find('.item-name').text()
+            const oldCost = recordElement.children('.item-cost').attr('data-record-cost')
+            const formHtml
+                = `
+                <form data-record-id="${recordId}" id="put-form" class="d-flex justify-content-between align-items-center">
+                    <div class="input-group">
+                        <button data-record-id="${recordId}" class="btn btn-link btnCancel">X</button>
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Task</span>
+                        </div>
+                        <input data-record-old-name="${oldName}" pattern=".{1,}" required title="1 characters minimum" type="text" aria-label="name" class="form-control" id="put-item-name" value=${oldName}>
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Deadline</span>
+                        </div>
+                        <input data-record-old-cost="${oldCost}" type="date" aria-label="Cost" class="form-control" id="item-cost" value=${oldCost}>
+                        <button class="btn btn-link" type='submit'>Update</button>
+                    </div>
+                </form>`;
+            recordElement.html(formHtml);
+            // Prevent Double click the li again
+            recordElement.addClass('on-edit')
+        }
+        function cancelEditForm(recordId) {
+            const recordElement = $(`.list-group-item[data-record-id='${recordId}'`);
+            const oldName = recordElement.find('#put-item-name').attr('data-record-old-name');
+            const oldCost = recordElement.find('#item-cost').attr('data-record-old-cost');
+            const element =
+                `
+                    <div>
+                        <input type="checkbox" class="status">
+                        <span class="item-id">${recordId}:</span> 
+                        <span class="item-name">${oldName}</span>
+                    </div>
+                    <i data-record-id="${recordId}" class="btnRemove far fa-trash-alt"></i>
+                    <span data-record-cost="${oldCost}" class="item-cost badge badge-primary badge-pill">${oldCost}</span>
+                `;
+                $(".status").each(function(){
+      $(this).click(function(){
+        var status = $(this).prop("checked");
+        if(status == true){
+          $(this).parent().children("p").css({"text-decoration": "line-through","color": "#a0a0a0"});
+        }else if(status == false){
+           $(this).parent().children("p").css({"text-decoration": "none","color": "black"});
+        };
+      });
+    });    
+            recordElement.html(element);
+            recordElement.removeClass('on-edit')
+        }
+        function getPutInputData(recordId) {
+            const recordElement = $(`.list-group-item[data-record-id='${recordId}'`);
+            const newName = recordElement.find('#put-item-name').val();
+            const newCost = recordElement.find('#item-cost').val();
+            return {
+                id: recordId,
+                name: newName,
+                cost: newCost
+            }
+        }
+        function sendEditItemRequest(recordId) {
+            const inputData = getPutInputData(recordId);
+            $.ajax({
+                url: `${API_URL}/${inputData['id']}`,
+                method: 'PUT',
+                data: inputData,
+                success: function (data) {
+                    console.log(data);
+                },
+                error: function (xhr, ajaxOptions, thrownError) {
+                    console.log(xhr.status);
+                    console.log(thrownError);
+                }
+            });
+        }
+        /**************************************************************
+         * Part 4: Remove Record by id
+         **************************************************************/
+        function sendRemoveItemRequest(recordId) {
+            $.ajax({
+                url: `${API_URL}/${recordId}`,
+                method: 'DELETE',
+                success: function (data) {
+                    console.log(data);
+                    if (!Debug_Mode) {
+                        location.reload();
+                    }
+                },
+                error: function (xhr, ajaxOptions, thrownError) {
+                    console.log(xhr.status);
+                    console.log(thrownError);
+                }
+            });
+        }
+        /**************************************************************
+         * Part 5: Main Function (Event Listening)
+         **************************************************************/
+        // Display past purchase records
+        getItemsFromServer()
+        /**
+         * Listen: Form submit event (Create new record)
+         */
+        $('#post-form').submit(function (e) {
+            // prevent auto reload the page after sending request
+            preventReload(e)
+            const inputData = getPostInputData();
+            // check inputData is valid
+            if (inputData) {
+                // create new record
+                postItemToServer(inputData);
+            }
+        });
+        /**
+         * Listen: Remove icon Click event (Remove a old record)
+         * Delegate Intro: http://jsgears.com/thread-402-1-1.html
+         * Because the li elements is generated by js, we need to use delegate to bind all the remove buttons.
+         */
+        $("body").delegate(".btnRemove", "click", function (e) {
+            const recordId = $(this).attr('data-record-id');
+            sendRemoveItemRequest(recordId);
+        });
+
+  
+        /**
+         * Listen: Double Click Event (Edit a old record)
+         */
+        $("body").delegate(".list-group-item:not(.on-edit)", "dblclick", function (e) {
+            const recordId = $(this).attr('data-record-id');
+            // Prevent DBClick the example one
+            if (recordId) {
+                showEditForm(recordId)
+            }
+        });
+        /**
+         * Listen: Click Event (Cancel Update Record)
+         */
+        $("body").delegate(".btnCancel", "click", function (e) {
+            const recordId = $(this).attr('data-record-id');
+            cancelEditForm(recordId)
+        });
+        /**
+         * Listen: Click Event (Send Update Record Request)
+         */
+        $("body").delegate("#put-form", "submit", function (e) {
+            // prevent auto reload the page after sending request
+            preventReload(e)
+            const recordId = $(this).attr('data-record-id');
+            sendEditItemRequest(recordId);
+        });
+    </script>
+</body>
+
+</html>
